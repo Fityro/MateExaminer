@@ -1,2 +1,2 @@
-# Исключаем манифесты
-Манифест_*.md
+ # Exclude manifests
+*_manifest.md
