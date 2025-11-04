@@ -41,29 +41,23 @@ const path = __importStar(require("path"));
 class CourseTreeItem extends vscode.TreeItem {
     constructor(label, fullPath, checked = false, isFolder = false, isCourse = false) {
         super(label, isFolder ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+        this.originalLabel = label;
         this.fullPath = fullPath;
         this.checked = checked;
         this.isFolder = isFolder;
         this.isCourse = isCourse;
-        this.originalLabel = label;
         this.contextValue = isCourse ? 'courseItem' : (isFolder ? 'courseFolder' : 'folderItem');
-        // Устанавливаем отображение
         this.updateDisplay();
-        // Добавляем команду для чекбоксов
-        if (isCourse || isFolder) {
-            this.command = {
-                command: 'trainingCatalogExaminer.toggleCourse',
-                title: 'Переключить выбор',
-                arguments: [this]
-            };
-        }
-        this.iconPath = isFolder ? vscode.ThemeIcon.Folder : vscode.ThemeIcon.File;
+        this.command = {
+            command: 'trainingCatalogExaminer.toggleCourse',
+            title: 'Toggle selection',
+            arguments: [this]
+        };
     }
     updateDisplay() {
-        if (this.isCourse || this.isFolder) {
-            const displayLabel = this.checked ? `☑️ ${this.originalLabel}` : `☐ ${this.originalLabel}`;
-            this.label = displayLabel;
-            this.tooltip = this.checked ? `${this.originalLabel} (выбрано)` : `${this.originalLabel} (кликните для выбора)`;
+        if (this.contextValue === 'courseItem' || this.isFolder) {
+            this.label = this.checked ? `☑️ ${this.originalLabel}` : `☐ ${this.originalLabel}`;
+            this.tooltip = this.checked ? `${this.originalLabel} (selected)` : `${this.originalLabel} (click to select)`;
         }
     }
     getOriginalLabel() {
@@ -71,11 +65,12 @@ class CourseTreeItem extends vscode.TreeItem {
     }
 }
 class ExaminerViewProvider {
-    constructor() {
+    constructor(extensionPath) {
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
         this.courses = [];
-        this.allItems = new Map(); // Хранить все элементы дерева
+        this.allItems = new Map();
+        this.extensionPath = extensionPath;
         this.databasePath = path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'Database', 'Courses');
         const courseNames = [
             'Automation QA engineer',
@@ -101,39 +96,53 @@ class ExaminerViewProvider {
         });
     }
     getTreeItem(element) {
+        // Устанавливаем иконки для папок
+        if (element.isFolder || element.isCourse) {
+            // Используем объект с путями для разных тем
+            const folderIcon = path.join(this.extensionPath, 'Ico', 'folder.svg');
+            const folderOpenedIcon = path.join(this.extensionPath, 'Ico', 'folder-opened.svg');
+            // VS Code автоматически переключает между иконками при раскрытии/сворачивании
+            element.iconPath = {
+                light: element.collapsibleState === vscode.TreeItemCollapsibleState.Expanded ? folderOpenedIcon : folderIcon,
+                dark: element.collapsibleState === vscode.TreeItemCollapsibleState.Expanded ? folderOpenedIcon : folderIcon
+            };
+        }
         return element;
     }
     getChildren(element) {
         if (!element) {
-            // Корневые элементы - курсы
             return Promise.resolve(this.courses);
         }
-        // Дочерние элементы - содержимое папок
         if (element.fullPath && fs.existsSync(element.fullPath)) {
             try {
-                const items = fs.readdirSync(element.fullPath, { withFileTypes: true });
-                const children = items.map(item => {
+                const subItems = fs.readdirSync(element.fullPath, { withFileTypes: true });
+                // Фильтруем только папки, исключаем файлы
+                const children = subItems
+                    .filter(item => item.isDirectory())
+                    .map(item => {
                     const itemPath = path.join(element.fullPath, item.name);
-                    // Проверяем, есть ли дочерние элементы для определения коллапса
-                    let hasChildren = false;
-                    if (item.isDirectory()) {
-                        try {
-                            const subItems = fs.readdirSync(itemPath);
-                            hasChildren = subItems.length > 0;
-                        }
-                        catch {
-                            hasChildren = false;
-                        }
+                    // Проверяем, есть ли внутри дочерние папки
+                    let hasSubFolders = false;
+                    try {
+                        const subSubItems = fs.readdirSync(itemPath, { withFileTypes: true });
+                        hasSubFolders = subSubItems.some(subItem => subItem.isDirectory());
                     }
-                    const treeItem = new CourseTreeItem(item.name, itemPath, false, item.isDirectory() && hasChildren, // только папки с содержимым могут раскрываться
-                    false // подпапки не являются курсами
-                    );
-                    // Сохраняем в карте для отслеживания состояния
-                    this.allItems.set(itemPath, treeItem);
-                    // Если это папка без детей, делаем её нераскрывающейся
-                    if (item.isDirectory() && !hasChildren) {
+                    catch {
+                        hasSubFolders = false;
+                    }
+                    const treeItem = new CourseTreeItem(item.name, itemPath, false, true, false);
+                    // Если нет дочерних папок, убираем стрелку раскрытия
+                    if (!hasSubFolders) {
                         treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
                     }
+                    treeItem.contextValue = 'courseFolder';
+                    treeItem.command = {
+                        command: 'trainingCatalogExaminer.toggleCourse',
+                        title: 'Toggle selection',
+                        arguments: [treeItem]
+                    };
+                    treeItem.updateDisplay();
+                    this.allItems.set(itemPath, treeItem);
                     return treeItem;
                 });
                 return Promise.resolve(children);
@@ -145,88 +154,82 @@ class ExaminerViewProvider {
         return Promise.resolve([]);
     }
     toggleCourse(item) {
-        console.log('Toggle called for:', item.getOriginalLabel(), 'Current checked:', item.checked);
-        // Переключаем состояние
         item.checked = !item.checked;
-        // Обновляем отображение
         item.updateDisplay();
-        // Уведомляем об изменении
         this._onDidChangeTreeData.fire(item);
-        console.log('After toggle:', item.getOriginalLabel(), 'New checked:', item.checked);
+    }
+    refresh(item) {
+        this._onDidChangeTreeData.fire(item);
     }
     getSelectedCourses() {
-        // Возвращаем только выбранные корневые курсы
-        return this.courses.filter(c => c.checked).map(c => c.getOriginalLabel());
-    }
-}
-class FolderItem extends vscode.TreeItem {
-    constructor(label, checked = false) {
-        super(label, vscode.TreeItemCollapsibleState.None);
-        this.label = label;
-        this.checked = checked;
-        this.contextValue = 'folderItem';
-        this.checkboxState = checked ? 'checked' : 'unchecked';
-    }
-}
-class FolderProvider {
-    constructor(folderNames) {
-        this._onDidChangeTreeData = new vscode.EventEmitter();
-        this.onDidChangeTreeData = this._onDidChangeTreeData.event;
-        this.folders = folderNames.map(name => new FolderItem(name));
-    }
-    getTreeItem(element) {
-        element.checkboxState = element.checked ? 'checked' : 'unchecked';
-        return element;
-    }
-    getChildren() {
-        return Promise.resolve(this.folders);
-    }
-    toggleCheck(label) {
-        const item = this.folders.find(f => f.label === label);
-        if (item) {
-            item.checked = !item.checked;
-            this._onDidChangeTreeData.fire();
-        }
-    }
-    getChecked() {
-        return this.folders.filter(f => f.checked).map(f => f.label);
+        const checkedFolders = [];
+        const buildPathString = (fullPath) => {
+            const parts = fullPath.replace(this.databasePath, '').split(path.sep).filter(p => p);
+            return parts.join(' > ');
+        };
+        // Собираем все отмеченные папки
+        this.courses.forEach(course => {
+            if (course.checked && course.fullPath) {
+                checkedFolders.push(course.fullPath);
+            }
+        });
+        this.allItems.forEach((item, itemPath) => {
+            if (item.checked && !this.courses.includes(item) && item.fullPath) {
+                checkedFolders.push(item.fullPath);
+            }
+        });
+        // Оставляем только самые глубокие выбранные папки (без родительских)
+        const deepestFolders = checkedFolders.filter(folder => !checkedFolders.some(other => other !== folder && folder.startsWith(other + path.sep)));
+        // Рекурсивно добавить все подпапки только для deepestFolders
+        const selected = [];
+        const addFoldersRecursively = (folderPath) => {
+            selected.push(buildPathString(folderPath));
+            try {
+                const subItems = fs.readdirSync(folderPath, { withFileTypes: true });
+                subItems.forEach(item => {
+                    if (item.isDirectory()) {
+                        addFoldersRecursively(path.join(folderPath, item.name));
+                    }
+                });
+            }
+            catch { }
+        };
+        deepestFolders.forEach(folder => addFoldersRecursively(folder));
+        return Array.from(new Set(selected));
     }
 }
 function activate(context) {
-    // Регистрируем провайдер для Activity Bar
-    const examinerProvider = new ExaminerViewProvider();
-    vscode.window.registerTreeDataProvider('trainingExaminerView', examinerProvider);
-    // Команда для переключения выбора курса
+    const examinerProvider = new ExaminerViewProvider(context.extensionPath);
+    const treeView = vscode.window.createTreeView('mateExaminerView', {
+        treeDataProvider: examinerProvider
+    });
+    // Обновляем иконки при раскрытии папки
+    treeView.onDidExpandElement(e => {
+        e.element.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+        examinerProvider.refresh(e.element);
+    });
+    // Обновляем иконки при сворачивании папки
+    treeView.onDidCollapseElement(e => {
+        e.element.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        examinerProvider.refresh(e.element);
+    });
+    context.subscriptions.push(treeView);
     context.subscriptions.push(vscode.commands.registerCommand('trainingCatalogExaminer.toggleCourse', (item) => {
         examinerProvider.toggleCourse(item);
     }));
-    // Команда для запуска экзамена с выбранными курсами - ПРЯМАЯ АВТОМАТИЗАЦИЯ
     context.subscriptions.push(vscode.commands.registerCommand('trainingCatalogExaminer.startFromSelection', async () => {
         const selected = examinerProvider.getSelectedCourses();
         if (selected.length === 0) {
-            vscode.window.showWarningMessage('Выберите хотя бы одно направление!');
+            vscode.window.showWarningMessage('Please select at least one direction!');
             return;
         }
-        // Создаем сообщение для чата
-        const examMessage = `🎯 АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ ВЫБОРА КУРСОВ:
-
-Выбор пользователя для экзамена:
-${selected.join('\n')}
-
-Время выбора: ${new Date().toLocaleString()}
-Готов к началу экзамена!
-
-Пожалуйста, проведи экзамен по выбранным курсам. Готов отвечать на вопросы!`;
-        // Копируем в буфер обмена
+        const examMessage = `⚠️ AI AGENT: Before you start the exam, you MUST read the README.md file and strictly follow ALL rules and instructions described in it. Do NOT proceed to any questions until you have read and understood README.md!\n\nUser selection for exam:\n${selected.join('\n')}\n\nSelection time: ${new Date().toLocaleString('en-US')}\nReady to start the exam!\n\nPlease conduct the exam for the selected courses. Ready to answer questions!`;
         await vscode.env.clipboard.writeText(examMessage);
         try {
-            // Открываем чат
             await vscode.commands.executeCommand('workbench.action.chat.open');
-            // Вставляем текст через 1 секунду
             setTimeout(async () => {
                 try {
                     await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-                    // Пробуем отправить автоматически
                     setTimeout(async () => {
                         try {
                             await vscode.commands.executeCommand('chat.action.submit');
@@ -244,8 +247,7 @@ ${selected.join('\n')}
                                         await vscode.commands.executeCommand('type', { text: '\n' });
                                     }
                                     catch {
-                                        // Если автоматическая отправка не сработала - пользователь нажмет Enter
-                                        console.log('Автоматическая отправка не удалась');
+                                        console.log('Automatic submission failed');
                                     }
                                 }
                             }
@@ -253,19 +255,17 @@ ${selected.join('\n')}
                     }, 800);
                 }
                 catch {
-                    vscode.window.showInformationMessage('📋 Чат открыт! Нажмите Ctrl+V и Enter');
+                    vscode.window.showInformationMessage('📋 Chat opened! Press Ctrl+V and Enter');
                 }
             }, 1000);
         }
         catch {
-            vscode.window.showInformationMessage('📋 Сообщение скопировано! Откройте чат Copilot и нажмите Ctrl+V + Enter');
+            vscode.window.showInformationMessage('📋 Message copied! Open Copilot chat and press Ctrl+V + Enter');
         }
     }));
-    // Простая команда для выбора папок (legacy, оставляем для совместимости с горячей клавишей)
     context.subscriptions.push(vscode.commands.registerCommand('trainingCatalogExaminer.start', async () => {
-        // Просто показываем Tree View
-        vscode.commands.executeCommand('workbench.view.extension.examinerContainer');
-        vscode.window.showInformationMessage('Выберите курсы в панели Training Examiner');
+        vscode.commands.executeCommand('workbench.view.extension.mateExaminerContainer');
+        vscode.window.showInformationMessage('Select courses in the Mate Examiner panel');
     }));
 }
 function deactivate() { }

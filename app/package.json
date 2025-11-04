@@ -1,31 +1,27 @@
 {
-  "name": "training-catalog-examiner",
-  "displayName": "Training Catalog Examiner",
-  "description": "VS Code extension for selecting training folders and starting an exam in Copilot chat.",
-  "version": "0.0.1",
+  "name": "mate-examiner",
+  "displayName": "Mate Examiner",
+  "description": "VS Code extension for selecting training folders and starting an exam in Copilot chat. Mate Examiner helps you automate and manage your training exam workflow.",
+  "version": "1.0.0",
   "publisher": "fityro",
   "engines": {
     "vscode": ">=1.70.0"
   },
   "categories": ["Other"],
-  "activationEvents": [
-    "*"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "trainingCatalogExaminer.start",
-        "title": "Открыть Training Examiner"
-      },
-      {
-        "command": "trainingCatalogExaminer.toggleCourse",
-        "title": "Переключить выбор курса"
+        "title": "Open Mate Examiner"
       },
       {
         "command": "trainingCatalogExaminer.startFromSelection",
-        "title": "Начать экзамен",
-        "icon": "$(play)"
+        "title": "Start",
+        "icon": {
+          "light": "./Ico/play.svg",
+          "dark": "./Ico/play.svg"
+        }
       }
     ],
     "keybindings": [
@@ -38,40 +34,35 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "trainingExaminer",
-          "title": "Training Examiner",
-          "icon": "$(play)"
+          "id": "mateExaminer",
+          "title": "Mate Examiner",
+          "icon": "./Ico/Mate_Examiner_logo.svg"
         }
       ]
     },
     "views": {
-      "trainingExaminer": [
+      "mateExaminer": [
         {
-          "id": "trainingExaminerView",
-          "name": "Выберите направления",
-          "when": "true"
+          "id": "mateExaminerView",
+          "name": "Select directions",
+          "when": "true",
+          "icon": "./Ico/play.svg"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "trainingExaminerView",
-        "contents": "Выберите курсы с помощью чекбоксов и нажмите кнопку запуска экзамена"
+        "view": "mateExaminerView",
+        "contents": "Select courses using checkboxes and press the start button"
       }
     ],
     "menus": {
-      "view/item/context": [
-        {
-          "command": "trainingCatalogExaminer.toggleFolder",
-          "when": "view == trainingExaminerView && viewItem == folderItem",
-          "group": "inline"
-        }
-      ],
       "view/title": [
         {
           "command": "trainingCatalogExaminer.startFromSelection",
-          "when": "view == trainingExaminerView",
-          "group": "navigation"
+          "when": "view == mateExaminerView",
+          "group": "navigation",
+          "icon": "./Ico/play.svg"
         }
       ]
     }
@@ -87,5 +78,8 @@
     "typescript": "^5.9.3",
     "vscode": "^1.1.37"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "activationEvents": [
+    "onView:mateExaminerView"
+  ]
 }
