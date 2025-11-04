@@ -1,7 +1,7 @@
 {
   "name": "mate-examiner",
   "displayName": "Mate Examiner",
-  "description": "VS Code extension for selecting training folders and starting an exam in Copilot chat. Mate Examiner helps you automate and manage your training exam workflow.",
+  "description": "Vibecoding for Mate",
   "version": "1.0.1",
   "publisher": "fityro1",
   "engines": {
