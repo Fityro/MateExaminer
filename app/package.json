@@ -2,7 +2,7 @@
   "name": "mate-examiner",
   "displayName": "Mate Examiner",
   "description": "Vibecoding for Mate",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "fityro1",
   "engines": {
     "vscode": ">=1.70.0"
