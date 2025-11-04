@@ -2,13 +2,30 @@
   "name": "mate-examiner",
   "displayName": "Mate Examiner",
   "description": "VS Code extension for selecting training folders and starting an exam in Copilot chat. Mate Examiner helps you automate and manage your training exam workflow.",
-  "version": "1.0.0",
-  "publisher": "fityro",
+  "version": "1.0.1",
+  "publisher": "fityro1",
   "engines": {
     "vscode": ">=1.70.0"
   },
   "categories": ["Other"],
   "main": "./out/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fityro/MateExaminer.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Fityro/MateExaminer/issues"
+  },
+  "homepage": "https://github.com/Fityro/MateExaminer",
+  "icon": "Ico/Mate_Examiner_logo.png",
+  "files": [
+    "out/",
+    "Ico/",
+    "index.html",
+    "README.md",
+    "Database/"
+  ],
   "contributes": {
     "commands": [
       {
